@@ -5,11 +5,13 @@ import type { Alert } from "../types";
 interface Props {
   open: boolean;
   initial?: Alert | null;
+  knownCategories: string[];
   onClose: () => void;
   onSubmit: (data: {
     name: string;
     description: string;
     subject_match: string;
+    category: string;
     color: string;
     icon: string;
   }) => Promise<void>;
@@ -17,10 +19,11 @@ interface Props {
   error: string | null;
 }
 
-export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }: Props) {
+export function AlertModal({ open, initial, knownCategories, onClose, onSubmit, onDelete, error }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [subjectMatch, setSubjectMatch] = useState("");
+  const [category, setCategory] = useState("");
   const [icon, setIcon] = useState("🔔");
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,6 +32,7 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
     setName(initial?.name ?? "");
     setDescription(initial?.description ?? "");
     setSubjectMatch(initial?.subject_match ?? "");
+    setCategory(initial?.category ?? "");
     setIcon(initial?.icon ?? "🔔");
     setSubmitting(false);
   }, [open, initial]);
@@ -42,6 +46,7 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
         name,
         description,
         subject_match: subjectMatch,
+        category: category.trim(),
         color: "brand",
         icon,
       });
@@ -99,6 +104,23 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
               placeholder={name || "leave blank to use the name"}
               className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
             />
+          </Field>
+          <Field
+            label="Category (optional)"
+            hint="Groups this alert under a collapsible section in the sidebar. Type a new name or pick an existing one."
+          >
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              list="alert-categories"
+              placeholder="Uncategorized"
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
+            />
+            <datalist id="alert-categories">
+              {knownCategories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
           </Field>
           <Field label="Icon (emoji, optional)">
             <input

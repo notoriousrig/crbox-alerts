@@ -13,6 +13,7 @@ class AlertCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = ""
     subject_match: str = ""
+    category: str = ""
     color: str = "brand"
     icon: str = ""
     sort_order: int = 0
@@ -22,6 +23,7 @@ class AlertUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     subject_match: str | None = None
+    category: str | None = None
     color: str | None = None
     icon: str | None = None
     sort_order: int | None = None
@@ -34,6 +36,7 @@ class AlertOut(BaseModel):
     name: str
     description: str
     subject_match: str
+    category: str
     color: str
     icon: str
     sort_order: int

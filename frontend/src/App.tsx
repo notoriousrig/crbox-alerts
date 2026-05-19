@@ -108,6 +108,15 @@ export default function App() {
     [alertsQ.data],
   );
 
+  const knownCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alertsQ.data ?? []) {
+      const c = (a.category || "").trim();
+      if (c) set.add(c);
+    }
+    return [...set].sort();
+  }, [alertsQ.data]);
+
   const handleOpen = (it: Item) => {
     if (!it.state?.read_at) {
       stateMut.mutate({ id: it.id, data: { read: true } });
@@ -204,6 +213,7 @@ export default function App() {
       <AlertModal
         open={modalOpen}
         initial={editing}
+        knownCategories={knownCategories}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);

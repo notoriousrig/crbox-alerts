@@ -3,6 +3,7 @@ export interface Alert {
   name: string;
   description: string;
   subject_match: string;
+  category: string;
   color: string;
   icon: string;
   sort_order: number;

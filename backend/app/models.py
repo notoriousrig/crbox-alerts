@@ -24,6 +24,9 @@ class Alert(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # Optional user-defined grouping (e.g. "Private Capital", "Personal").
+    # Empty string = uncategorized.
+    category: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     # Subject substring used to bucket incoming Gmail messages into this
     # alert. Default = the alert name itself (matches "Google Alert - <name>").
     subject_match: Mapped[str] = mapped_column(String(200), default="", nullable=False)
