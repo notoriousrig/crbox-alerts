@@ -122,5 +122,5 @@ def callback(request: Request, code: str = "", state: str = "", error: str = "")
 
 
 @router.post("/disconnect", status_code=204, dependencies=[RequireUser])
-def disconnect() -> None:
+def disconnect():
     oauth_disconnect()

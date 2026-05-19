@@ -99,7 +99,7 @@ def update_alert(
 
 
 @router.delete("/{alert_id}", status_code=204)
-def delete_alert(alert_id: int, db: Session = Depends(get_db)) -> None:
+def delete_alert(alert_id: int, db: Session = Depends(get_db)):
     a = db.get(Alert, alert_id)
     if a is None:
         raise HTTPException(status_code=404, detail="Alert not found")

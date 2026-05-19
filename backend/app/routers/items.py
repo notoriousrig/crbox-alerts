@@ -104,7 +104,7 @@ def patch_state(
 
 
 @router.post("/bulk-state", status_code=204)
-def bulk_state(payload: BulkStatePatch, db: Session = Depends(get_db)) -> None:
+def bulk_state(payload: BulkStatePatch, db: Session = Depends(get_db)):
     if not payload.ids:
         return
     now = datetime.utcnow()
