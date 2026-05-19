@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { Menu, RefreshCw } from "lucide-react";
 
 import { api } from "./api";
 import type { Alert, Item, SortMode, StateFilter, TimeWindow, View } from "./types";
@@ -34,6 +34,7 @@ export default function App() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { mode: viewMode, setMode: setViewMode, cycle: cycleViewMode } = useViewMode();
 
   // Keyboard: `v` cycles density.
@@ -192,20 +193,33 @@ export default function App() {
           setEditing(null);
           setModalError(null);
           setModalOpen(true);
+          setMobileNavOpen(false);
         }}
         onEditAlert={(a) => {
           setEditing(a);
           setModalError(null);
           setModalOpen(true);
+          setMobileNavOpen(false);
         }}
         totalUnread={totalUnread}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
       />
 
       <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <header className="px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+        <header className="px-4 md:px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-xl font-semibold flex-1">{currentTitle}</h1>
-            <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="md:hidden p-2 -ml-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+              title="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <h1 className="text-lg md:text-xl font-semibold flex-1 truncate">{currentTitle}</h1>
+            <div className="hidden sm:block">
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            </div>
             <button
               onClick={() => pollAllMut.mutate()}
               disabled={pollAllMut.isPending}
@@ -251,7 +265,7 @@ export default function App() {
 
         <ConnectGmailBanner />
 
-        <div className={viewMode === "text" ? "px-6 py-4 max-w-5xl mx-auto" : "p-6 max-w-3xl mx-auto"}>
+        <div className={viewMode === "text" ? "px-3 md:px-6 py-4 max-w-5xl mx-auto" : "p-3 md:p-6 max-w-3xl mx-auto"}>
           {view.kind === "digest" ? (
             <DigestView
               digest={digestQ.data}

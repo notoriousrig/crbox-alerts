@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import {
   Bell, BellOff, BookmarkCheck, Calendar, CalendarDays,
-  ChevronDown, ChevronRight, Inbox, Pencil, Plus,
+  ChevronDown, ChevronRight, Inbox, Pencil, Plus, X,
 } from "lucide-react";
 import type { Alert, View } from "../types";
 import { classNames } from "../lib/format";
@@ -14,6 +14,8 @@ interface Props {
   onAddAlert: () => void;
   onEditAlert: (a: Alert) => void;
   totalUnread: number;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
 }
 
 const COLLAPSED_KEY = "crbox-alerts:collapsed-categories";
@@ -59,7 +61,10 @@ function groupByCategory(alerts: Alert[]): { category: string; items: Alert[] }[
     });
 }
 
-export function Sidebar({ alerts, view, onSelectView, onAddAlert, onEditAlert, totalUnread }: Props) {
+export function Sidebar({
+  alerts, view, onSelectView, onAddAlert, onEditAlert, totalUnread,
+  mobileOpen, onMobileClose,
+}: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
 
   const toggleCategory = (cat: string) => {
@@ -74,12 +79,41 @@ export function Sidebar({ alerts, view, onSelectView, onAddAlert, onEditAlert, t
 
   const groups = groupByCategory(alerts);
 
+  // On mobile, picking any view dismisses the drawer.
+  const select = (v: View) => {
+    onSelectView(v);
+    onMobileClose();
+  };
+
   return (
-    <aside className="w-72 shrink-0 border-r border-zinc-200 dark:border-zinc-800 flex flex-col h-full overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
-        <span className="text-2xl">🔔</span>
-        <h1 className="font-semibold text-lg">crbox-alerts</h1>
-      </div>
+    <>
+      {/* Mobile backdrop */}
+      <div
+        className={classNames(
+          "fixed inset-0 bg-black/40 z-20 md:hidden transition-opacity",
+          mobileOpen ? "opacity-100" : "opacity-0 pointer-events-none",
+        )}
+        onClick={onMobileClose}
+      />
+      <aside
+        className={classNames(
+          "bg-zinc-50 dark:bg-zinc-950 w-72 shrink-0 border-r border-zinc-200 dark:border-zinc-800 flex flex-col h-full overflow-hidden",
+          // Desktop: normal flex child. Mobile: fixed slide-in drawer.
+          "fixed top-0 bottom-0 left-0 z-30 transform transition-transform md:relative md:transform-none md:translate-x-0 md:z-auto",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
+          <span className="text-2xl">🔔</span>
+          <h1 className="font-semibold text-lg flex-1">crbox-alerts</h1>
+          <button
+            onClick={onMobileClose}
+            className="md:hidden p-1.5 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500"
+            title="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
       <nav className="flex-1 overflow-y-auto scrollbar-thin px-2 py-3">
         <SectionLabel>Views</SectionLabel>
@@ -87,32 +121,32 @@ export function Sidebar({ alerts, view, onSelectView, onAddAlert, onEditAlert, t
           icon={<Inbox size={16} />}
           label="Inbox"
           active={view.kind === "inbox"}
-          onClick={() => onSelectView({ kind: "inbox" })}
+          onClick={() => select({ kind: "inbox" })}
           badge={totalUnread}
         />
         <NavRow
           icon={<Calendar size={16} />}
           label="Today"
           active={view.kind === "digest" && view.window === "today"}
-          onClick={() => onSelectView({ kind: "digest", window: "today" })}
+          onClick={() => select({ kind: "digest", window: "today" })}
         />
         <NavRow
           icon={<CalendarDays size={16} />}
           label="This week"
           active={view.kind === "digest" && view.window === "week"}
-          onClick={() => onSelectView({ kind: "digest", window: "week" })}
+          onClick={() => select({ kind: "digest", window: "week" })}
         />
         <NavRow
           icon={<BookmarkCheck size={16} />}
           label="Saved"
           active={view.kind === "saved"}
-          onClick={() => onSelectView({ kind: "saved" })}
+          onClick={() => select({ kind: "saved" })}
         />
         <NavRow
           icon={<BellOff size={16} />}
           label="Hidden"
           active={view.kind === "hidden"}
-          onClick={() => onSelectView({ kind: "hidden" })}
+          onClick={() => select({ kind: "hidden" })}
         />
 
         <div className="mt-5 flex items-center justify-between px-2 pb-1">
@@ -151,7 +185,7 @@ export function Sidebar({ alerts, view, onSelectView, onAddAlert, onEditAlert, t
               {!isCollapsed && g.items.map((a) => (
                 <div key={a.id} className="group flex items-stretch">
                   <button
-                    onClick={() => onSelectView({ kind: "alert", alertId: a.id })}
+                    onClick={() => select({ kind: "alert", alertId: a.id })}
                     className={classNames(
                       "flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left",
                       view.kind === "alert" && view.alertId === a.id
@@ -182,7 +216,8 @@ export function Sidebar({ alerts, view, onSelectView, onAddAlert, onEditAlert, t
           );
         })}
       </nav>
-    </aside>
+      </aside>
+    </>
   );
 }
 

@@ -29,13 +29,13 @@ export function ItemCard({ item, mode, onToggleRead, onToggleSaved, onToggleHidd
           isRead && "text-zinc-500",
         )}
       >
-        <span className="text-xs text-zinc-500 tabular-nums shrink-0 w-12">
+        <span className="text-xs text-zinc-500 tabular-nums shrink-0 w-10 md:w-12">
           {timeAgo(item.published_at).replace(" ago", "")}
         </span>
-        <span className="text-xs text-zinc-500 shrink-0 truncate w-32" title={item.source_domain}>
+        <span className="hidden sm:inline text-xs text-zinc-500 shrink-0 truncate w-24 md:w-32" title={item.source_domain}>
           {item.source_domain}
         </span>
-        <span className="text-xs text-zinc-600 dark:text-zinc-400 shrink-0 truncate w-32" title={item.alert_name}>
+        <span className="hidden md:inline text-xs text-zinc-600 dark:text-zinc-400 shrink-0 truncate w-32" title={item.alert_name}>
           {item.alert_icon} {item.alert_name}
         </span>
         <span className={classNames("flex-1 truncate", !isRead && "font-medium")}>
