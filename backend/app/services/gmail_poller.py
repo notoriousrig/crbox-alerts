@@ -175,18 +175,42 @@ def _match_alert(subject: str, alerts: list[Alert]) -> Alert | None:
     return best
 
 
-def _ensure_unsorted(db: Session) -> Alert:
-    a = db.execute(select(Alert).where(Alert.name == "Unsorted")).scalar_one_or_none()
-    if a is None:
-        a = Alert(
-            name="Unsorted",
-            description="Auto-created for Google Alerts emails that didn't match any other alert by subject.",
-            subject_match="",  # don't compete with real alerts
-            icon="📥",
-            sort_order=999,
-        )
-        db.add(a)
+def _auto_create_alert(db: Session, subject: str) -> Alert:
+    """Derive an Alert from an email Subject line.
+
+    Strips the "Google Alert - " prefix and uses the remainder as both
+    the alert name and its subject_match. If the strip yields nothing
+    usable, falls back to a single shared "Unsorted" bucket.
+    """
+    query = _strip_subject_prefix(subject)
+    if not query or len(query) < 2:
+        name = "Unsorted"
+    else:
+        # Truncate to fit the column (120 chars).
+        name = query[:120]
+
+    existing = db.execute(select(Alert).where(Alert.name == name)).scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    a = Alert(
+        name=name,
+        description="Auto-created from Gmail Subject line.",
+        subject_match=name,
+        icon="🔔",
+        sort_order=100,
+    )
+    db.add(a)
+    try:
         db.flush()
+    except Exception:
+        # Race against a parallel worker that just created the same row.
+        db.rollback()
+        existing = db.execute(select(Alert).where(Alert.name == name)).scalar_one_or_none()
+        if existing is not None:
+            return existing
+        raise
+    log.info("Auto-created alert %r from Subject %r", name, subject)
     return a
 
 
@@ -269,7 +293,7 @@ def poll_gmail() -> PollResult:
 
             alert = _match_alert(subject, alerts)
             if alert is None:
-                alert = _ensure_unsorted(db)
+                alert = _auto_create_alert(db, subject)
                 if alert not in alerts:
                     alerts.append(alert)
 

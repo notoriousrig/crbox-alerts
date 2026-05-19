@@ -23,6 +23,11 @@ export default function App() {
     queryFn: api.listAlerts,
   });
 
+  const googleQ = useQuery({
+    queryKey: ["google", "status"],
+    queryFn: api.googleStatus,
+  });
+
   const itemsParams = useMemo(() => {
     if (view.kind === "alert") return { alert_id: view.alertId, state: "inbox" as StateFilter };
     if (view.kind === "saved") return { state: "saved" as StateFilter };
@@ -181,9 +186,11 @@ export default function App() {
                   ? "No saved items yet."
                   : view.kind === "hidden"
                   ? "No hidden items."
+                  : !googleQ.data?.connected
+                  ? "Connect Gmail above to start receiving alerts."
                   : (alertsQ.data ?? []).length === 0
-                  ? "Add your first Google Alert with the + button on the left."
-                  : "Nothing here. Try the refresh button above."
+                  ? "Waiting for Google Alerts emails. Alert buckets will appear here automatically once one of your Google Alert digests lands in Gmail (hit the refresh button above to poll now)."
+                  : "Nothing new. Hit the refresh button above to poll Gmail."
               }
               onToggleRead={handleToggleRead}
               onToggleSaved={handleToggleSaved}
