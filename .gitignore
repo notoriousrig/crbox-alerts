@@ -1,0 +1,33 @@
+# Secrets
+.env
+.env.local
+
+# Local-only compose overrides — never deploy to NAS3
+docker-compose.override.yml
+docker-compose.override.yaml
+docker-compose.local.yml
+
+# Runtime data — bind-mounted into the backend
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
