@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Alert } from "../types";
 
 interface Props {
@@ -140,7 +140,7 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
       <span className="text-xs font-medium text-zinc-500 mb-1 block">{label}</span>

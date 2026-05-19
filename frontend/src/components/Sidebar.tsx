@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Bell, BellOff, BookmarkCheck, Calendar, CalendarDays, Inbox, Pencil, Plus } from "lucide-react";
 import type { Alert, View } from "../types";
 import { classNames } from "../lib/format";
@@ -103,7 +104,7 @@ export function Sidebar({ alerts, view, onSelectView, onAddAlert, onEditAlert, t
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div className="text-[10px] uppercase tracking-wide font-semibold text-zinc-500 px-2 py-1">
       {children}
@@ -114,7 +115,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function NavRow({
   icon, label, active, onClick, badge,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;

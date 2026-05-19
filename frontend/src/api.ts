@@ -17,7 +17,7 @@ async function req<T>(
     Accept: "application/json",
     ...(init?.headers as Record<string, string> | undefined),
   };
-  let body: BodyInit | undefined = init?.body;
+  let body: BodyInit | null | undefined = init?.body;
   if (init?.json !== undefined) {
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(init.json);
