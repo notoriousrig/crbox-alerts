@@ -9,7 +9,7 @@ interface Props {
   onSubmit: (data: {
     name: string;
     description: string;
-    feed_url: string;
+    subject_match: string;
     color: string;
     icon: string;
   }) => Promise<void>;
@@ -20,7 +20,7 @@ interface Props {
 export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [feedUrl, setFeedUrl] = useState("");
+  const [subjectMatch, setSubjectMatch] = useState("");
   const [icon, setIcon] = useState("🔔");
   const [submitting, setSubmitting] = useState(false);
 
@@ -28,7 +28,7 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
     if (!open) return;
     setName(initial?.name ?? "");
     setDescription(initial?.description ?? "");
-    setFeedUrl(initial?.feed_url ?? "");
+    setSubjectMatch(initial?.subject_match ?? "");
     setIcon(initial?.icon ?? "🔔");
     setSubmitting(false);
   }, [open, initial]);
@@ -38,7 +38,13 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
   const submit = async () => {
     setSubmitting(true);
     try {
-      await onSubmit({ name, description, feed_url: feedUrl, color: "brand", icon });
+      await onSubmit({
+        name,
+        description,
+        subject_match: subjectMatch,
+        color: "brand",
+        icon,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -64,9 +70,12 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
 
         {!initial && (
           <p className="text-sm text-zinc-500 mb-4">
-            In <a href="https://www.google.com/alerts" target="_blank" rel="noreferrer" className="underline">Google Alerts</a>,
-            click the pencil on an alert → "Show options" → set
-            <span className="font-medium"> Deliver to: RSS feed</span> → save → copy the RSS feed URL and paste it below.
+            Name this alert to match the search query you set up in{" "}
+            <a href="https://www.google.com/alerts" target="_blank" rel="noreferrer" className="underline">
+              Google Alerts
+            </a>
+            . crbox-alerts buckets incoming emails by matching this name (or the
+            optional Subject match override) against each email's Subject line.
           </p>
         )}
 
@@ -80,12 +89,15 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
               className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
             />
           </Field>
-          <Field label="Feed URL">
+          <Field
+            label="Subject match (optional)"
+            hint="Substring to match against the email Subject line. Defaults to the name above. Useful if your Google Alert query contains punctuation."
+          >
             <input
-              value={feedUrl}
-              onChange={(e) => setFeedUrl(e.target.value)}
-              placeholder="https://www.google.com/alerts/feeds/…"
-              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono text-xs"
+              value={subjectMatch}
+              onChange={(e) => setSubjectMatch(e.target.value)}
+              placeholder={name || "leave blank to use the name"}
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950"
             />
           </Field>
           <Field label="Icon (emoji, optional)">
@@ -128,7 +140,7 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
             </button>
             <button
               onClick={submit}
-              disabled={!name.trim() || !feedUrl.trim() || submitting}
+              disabled={!name.trim() || submitting}
               className="px-3 py-1.5 rounded-md text-sm bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {submitting ? "Saving…" : initial ? "Save" : "Add alert"}
@@ -140,11 +152,12 @@ export function AlertModal({ open, initial, onClose, onSubmit, onDelete, error }
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block">
       <span className="text-xs font-medium text-zinc-500 mb-1 block">{label}</span>
       {children}
+      {hint && <span className="text-xs text-zinc-500 mt-1 block">{hint}</span>}
     </label>
   );
 }

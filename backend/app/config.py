@@ -14,9 +14,18 @@ class Settings(BaseSettings):
     cf_access_team_domain: str = ""
     cf_access_aud: str = ""
 
-    # RSS polling
+    # Gmail OAuth (Google Cloud project credentials)
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    # Public origin for the OAuth callback (must match the redirect URI
+    # registered in Google Cloud Console). Empty = derive from request host
+    # at OAuth-start time.
+    public_base_url: str = ""
+
+    # Gmail polling
     poll_interval_minutes: int = 30
-    poll_concurrency: int = 4
+    # How many days back to scan when polling. Bounds the query cost.
+    gmail_lookback_days: int = 7
 
     # Nightly SQLite backup (server local time, 0-23)
     backup_hour: int = 4

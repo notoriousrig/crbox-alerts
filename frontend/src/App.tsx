@@ -8,6 +8,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ItemList } from "./components/ItemList";
 import { DigestView } from "./components/DigestView";
 import { AlertModal } from "./components/AlertModal";
+import { ConnectGmailBanner } from "./components/ConnectGmailBanner";
 import { ThemeToggle } from "./components/ThemeToggle";
 
 export default function App() {
@@ -63,10 +64,7 @@ export default function App() {
   });
 
   const pollAllMut = useMutation({
-    mutationFn: async () => {
-      const all = alertsQ.data ?? [];
-      await Promise.allSettled(all.map((a) => api.pollAlert(a.id)));
-    },
+    mutationFn: () => api.pollNow(),
     onSuccess: invalidateAll,
   });
 
@@ -74,22 +72,18 @@ export default function App() {
     mutationFn: async (data: {
       name: string;
       description: string;
-      feed_url: string;
+      subject_match: string;
       color: string;
       icon: string;
     }) => {
       if (editing) return api.updateAlert(editing.id, data);
       return api.createAlert(data);
     },
-    onSuccess: (created) => {
+    onSuccess: () => {
       invalidateAll();
       setModalOpen(false);
       setEditing(null);
       setModalError(null);
-      if (!editing && created) {
-        // Trigger an initial poll so the new alert isn't empty.
-        api.pollAlert(created.id).then(invalidateAll).catch(() => {});
-      }
     },
     onError: (e: Error) => setModalError(e.message),
   });
@@ -156,12 +150,14 @@ export default function App() {
             onClick={() => pollAllMut.mutate()}
             disabled={pollAllMut.isPending}
             className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-50"
-            title="Poll all feeds now"
+            title="Poll Gmail now"
           >
             <RefreshCw size={18} className={pollAllMut.isPending ? "animate-spin" : ""} />
           </button>
           <ThemeToggle />
         </header>
+
+        <ConnectGmailBanner />
 
         <div className="p-6 max-w-3xl mx-auto">
           {view.kind === "digest" ? (

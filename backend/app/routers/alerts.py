@@ -1,4 +1,4 @@
-"""Alert CRUD + manual poll trigger."""
+"""Alert CRUD + manual Gmail poll trigger."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +9,7 @@ from app.auth import RequireUser
 from app.database import get_db
 from app.models import Alert, Item, ItemState
 from app.schemas import AlertCreate, AlertOut, AlertUpdate, PollOut
-from app.services.rss_poller import poll_alert, validate_feed
+from app.services.gmail_poller import poll_gmail
 
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[RequireUser])
@@ -20,7 +20,7 @@ def _alert_to_out(a: Alert, unread: int, total: int) -> AlertOut:
         id=a.id,
         name=a.name,
         description=a.description,
-        feed_url=a.feed_url,
+        subject_match=a.subject_match or "",
         color=a.color,
         icon=a.icon,
         sort_order=a.sort_order,
@@ -62,26 +62,16 @@ def list_alerts(db: Session = Depends(get_db)) -> list[AlertOut]:
 
 @router.post("", response_model=AlertOut, status_code=201)
 def create_alert(payload: AlertCreate, db: Session = Depends(get_db)) -> AlertOut:
-    ok, err = validate_feed(payload.feed_url)
-    if not ok:
-        raise HTTPException(status_code=400, detail=err)
-
     existing_name = db.execute(
         select(Alert).where(Alert.name == payload.name)
     ).scalar_one_or_none()
     if existing_name is not None:
         raise HTTPException(status_code=409, detail="An alert with that name already exists")
 
-    existing_url = db.execute(
-        select(Alert).where(Alert.feed_url == payload.feed_url)
-    ).scalar_one_or_none()
-    if existing_url is not None:
-        raise HTTPException(status_code=409, detail="That feed URL is already tracked")
-
     a = Alert(
         name=payload.name,
         description=payload.description,
-        feed_url=payload.feed_url,
+        subject_match=payload.subject_match or payload.name,
         color=payload.color,
         icon=payload.icon,
         sort_order=payload.sort_order,
@@ -100,13 +90,6 @@ def update_alert(
     if a is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     data = payload.model_dump(exclude_unset=True)
-    if "feed_url" in data and data["feed_url"] != a.feed_url:
-        ok, err = validate_feed(data["feed_url"])
-        if not ok:
-            raise HTTPException(status_code=400, detail=err)
-        # Reset poll bookkeeping so we re-fetch fresh.
-        a.etag = ""
-        a.last_modified = ""
     for k, v in data.items():
         setattr(a, k, v)
     db.commit()
@@ -124,17 +107,15 @@ def delete_alert(alert_id: int, db: Session = Depends(get_db)) -> None:
     db.commit()
 
 
-@router.post("/{alert_id}/poll", response_model=PollOut)
-def manual_poll(alert_id: int, db: Session = Depends(get_db)) -> PollOut:
-    a = db.get(Alert, alert_id)
-    if a is None:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    result = poll_alert(alert_id)
-    if "error" in result and "status" not in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+@router.post("/poll", response_model=PollOut)
+def manual_poll() -> PollOut:
+    """Trigger an immediate Gmail poll across all alerts."""
+    try:
+        result = poll_gmail()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return PollOut(
-        status=result.get("status", 0),
-        new=result.get("new", 0),
-        updated=result.get("updated", 0),
-        error=result.get("error", "") or "",
+        messages_seen=result.messages_seen,
+        items_new=result.items_new,
+        error="",
     )

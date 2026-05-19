@@ -2,6 +2,7 @@ import type {
   Alert,
   BulkAction,
   Digest,
+  GoogleStatus,
   Item,
   ItemState,
   StateFilter,
@@ -50,7 +51,7 @@ export const api = {
   createAlert: (data: {
     name: string;
     description?: string;
-    feed_url: string;
+    subject_match?: string;
     color?: string;
     icon?: string;
     sort_order?: number;
@@ -59,11 +60,20 @@ export const api = {
     req<Alert>(`/alerts/${id}`, { method: "PATCH", json: data }),
   deleteAlert: (id: number) =>
     req<void>(`/alerts/${id}`, { method: "DELETE" }),
-  pollAlert: (id: number) =>
-    req<{ status: number; new: number; updated: number; error: string }>(
-      `/alerts/${id}/poll`,
+  pollNow: () =>
+    req<{ messages_seen: number; items_new: number; error: string }>(
+      "/alerts/poll",
       { method: "POST" },
     ),
+
+  // Google OAuth
+  googleStatus: () => req<GoogleStatus>("/auth/google/status"),
+  googleStart: (returnTo: string = "/") =>
+    req<{ authorization_url: string }>(
+      `/auth/google/start?return_to=${encodeURIComponent(returnTo)}`,
+    ),
+  googleDisconnect: () =>
+    req<void>("/auth/google/disconnect", { method: "POST" }),
 
   // Items
   listItems: (params: {

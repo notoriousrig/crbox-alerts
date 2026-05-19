@@ -1,6 +1,6 @@
 """APScheduler bootstrap.
 
-Periodic RSS poll (every POLL_INTERVAL_MINUTES) + nightly SQLite backup
+Periodic Gmail poll (every POLL_INTERVAL_MINUTES) + nightly SQLite backup
 + daily prune of stale item rows.
 """
 from __future__ import annotations
@@ -19,17 +19,17 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _run_poll() -> None:
-    from app.services.rss_poller import poll_all
-    log.info("Scheduled RSS poll starting")
+    from app.services.gmail_poller import poll_gmail
+    log.info("Scheduled Gmail poll starting")
     try:
-        result = poll_all()
+        result = poll_gmail()
         log.info("Poll done: %s", result.as_dict())
     except Exception:
-        log.exception("RSS poll failed")
+        log.exception("Gmail poll failed")
 
 
 def _run_prune() -> None:
-    from app.services.rss_poller import prune_old_items
+    from app.services.gmail_poller import prune_old_items
     try:
         n = prune_old_items()
         if n:
@@ -57,9 +57,9 @@ def start_scheduler() -> None:
     _scheduler.add_job(
         _run_poll,
         IntervalTrigger(minutes=max(5, settings.poll_interval_minutes)),
-        id="rss_poll",
+        id="gmail_poll",
         replace_existing=True,
-        next_run_time=None,  # don't fire immediately on boot
+        next_run_time=None,
     )
     _scheduler.add_job(
         _run_prune,
@@ -75,7 +75,7 @@ def start_scheduler() -> None:
     )
     _scheduler.start()
     log.info(
-        "Scheduler started — RSS poll every %dm, backup @ %02d:00 UTC",
+        "Scheduler started — Gmail poll every %dm, backup @ %02d:00 UTC",
         settings.poll_interval_minutes, settings.backup_hour,
     )
 

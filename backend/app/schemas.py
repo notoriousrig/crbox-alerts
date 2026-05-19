@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class AlertCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = ""
-    feed_url: str = Field(min_length=1)
+    subject_match: str = ""
     color: str = "brand"
     icon: str = ""
     sort_order: int = 0
@@ -21,7 +21,7 @@ class AlertCreate(BaseModel):
 class AlertUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    feed_url: str | None = None
+    subject_match: str | None = None
     color: str | None = None
     icon: str | None = None
     sort_order: int | None = None
@@ -33,7 +33,7 @@ class AlertOut(BaseModel):
     id: int
     name: str
     description: str
-    feed_url: str
+    subject_match: str
     color: str
     icon: str
     sort_order: int
@@ -46,10 +46,16 @@ class AlertOut(BaseModel):
 
 
 class PollOut(BaseModel):
-    status: int
-    new: int
-    updated: int
+    messages_seen: int
+    items_new: int
     error: str = ""
+
+
+class GoogleStatusOut(BaseModel):
+    connected: bool
+    email: str = ""
+    scopes: list[str] = []
+    last_polled_at: datetime | None = None
 
 
 # -------------------------- Items --------------------------

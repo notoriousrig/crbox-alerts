@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import CurrentUser, RequireUser
 from app.config import settings
-from app.routers import alerts, digest, items, settings_
+from app.routers import alerts, digest, items, oauth, settings_
 from app.scheduler import shutdown_scheduler, start_scheduler
 
 
@@ -52,6 +52,7 @@ if not settings.cf_access_aud:
 app.include_router(alerts.router)
 app.include_router(items.router)
 app.include_router(digest.router)
+app.include_router(oauth.router)
 app.include_router(settings_.router)
 
 

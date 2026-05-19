@@ -2,7 +2,7 @@ export interface Alert {
   id: number;
   name: string;
   description: string;
-  feed_url: string;
+  subject_match: string;
   color: string;
   icon: string;
   sort_order: number;
@@ -12,6 +12,13 @@ export interface Alert {
   created_at: string;
   unread_count: number;
   total_count: number;
+}
+
+export interface GoogleStatus {
+  connected: boolean;
+  email: string;
+  scopes: string[];
+  last_polled_at: string | null;
 }
 
 export interface ItemState {

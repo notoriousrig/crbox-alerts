@@ -24,7 +24,11 @@ class Alert(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
-    feed_url: Mapped[str] = mapped_column(Text, nullable=False)
+    # Subject substring used to bucket incoming Gmail messages into this
+    # alert. Default = the alert name itself (matches "Google Alert - <name>").
+    subject_match: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    # Unused since 2026-05-18 (RSS ingestion removed). Kept for old rows.
+    feed_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     color: Mapped[str] = mapped_column(String(20), default="brand", nullable=False)
     icon: Mapped[str] = mapped_column(String(40), default="", nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -43,7 +47,6 @@ class Alert(Base):
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_alert_name"),
-        UniqueConstraint("feed_url", name="uq_alert_feed_url"),
     )
 
 
