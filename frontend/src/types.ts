@@ -56,6 +56,10 @@ export interface Digest {
 
 export type StateFilter = "inbox" | "unread" | "read" | "saved" | "hidden" | "all";
 
+export type SortMode = "newest" | "oldest" | "source";
+
+export type TimeWindow = "all" | "today" | "week" | "month";
+
 export type BulkAction = "read" | "unread" | "save" | "unsave" | "hide" | "unhide";
 
 export type View =

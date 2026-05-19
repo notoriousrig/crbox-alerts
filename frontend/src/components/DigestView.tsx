@@ -1,9 +1,12 @@
 import { CheckCheck, Loader2 } from "lucide-react";
 import type { Digest, Item } from "../types";
+import type { ViewMode } from "../hooks/useViewMode";
+import { ItemCard } from "./ItemCard";
 
 interface Props {
   digest: Digest | undefined;
   isLoading: boolean;
+  mode: ViewMode;
   onToggleRead: (item: Item) => void;
   onToggleSaved: (item: Item) => void;
   onToggleHidden: (item: Item) => void;
@@ -11,10 +14,8 @@ interface Props {
   onMarkGroupRead: (alertId: number, items: Item[]) => void;
 }
 
-import { ItemCard } from "./ItemCard";
-
 export function DigestView({
-  digest, isLoading,
+  digest, isLoading, mode,
   onToggleRead, onToggleSaved, onToggleHidden, onOpen, onMarkGroupRead,
 }: Props) {
   if (isLoading) {
@@ -31,6 +32,8 @@ export function DigestView({
       </div>
     );
   }
+
+  const gap = mode === "text" ? "gap-0.5" : mode === "list" ? "gap-1.5" : mode === "compact" ? "gap-2" : "gap-3";
 
   return (
     <div className="flex flex-col gap-8">
@@ -52,11 +55,12 @@ export function DigestView({
               <CheckCheck size={14} /> Mark all read
             </button>
           </div>
-          <div className="flex flex-col gap-3">
+          <div className={`flex flex-col ${gap}`}>
             {group.items.map((it) => (
               <ItemCard
                 key={it.id}
                 item={it}
+                mode={mode}
                 onToggleRead={onToggleRead}
                 onToggleSaved={onToggleSaved}
                 onToggleHidden={onToggleHidden}

@@ -17,6 +17,7 @@ from app.schemas import BulkStatePatch, ItemOut, ItemStateOut, ItemStatePatch
 router = APIRouter(prefix="/api/items", tags=["items"], dependencies=[RequireUser])
 
 StateFilter = Literal["unread", "read", "saved", "hidden", "all", "inbox"]
+SortMode = Literal["newest", "oldest", "source"]
 
 
 def _item_to_out(it: Item, alert: Alert | None) -> ItemOut:
@@ -41,15 +42,18 @@ def list_items(
     alert_id: int | None = None,
     state: StateFilter = "inbox",
     since_hours: int | None = None,
+    sort: SortMode = "newest",
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[ItemOut]:
-    stmt = (
-        select(Item)
-        .options(joinedload(Item.alert), joinedload(Item.state))
-        .order_by(Item.published_at.desc())
-    )
+    stmt = select(Item).options(joinedload(Item.alert), joinedload(Item.state))
+    if sort == "oldest":
+        stmt = stmt.order_by(Item.published_at.asc())
+    elif sort == "source":
+        stmt = stmt.order_by(Item.source_domain.asc(), Item.published_at.desc())
+    else:  # newest
+        stmt = stmt.order_by(Item.published_at.desc())
     if alert_id is not None:
         stmt = stmt.where(Item.alert_id == alert_id)
     if since_hours is not None:

@@ -5,6 +5,7 @@ import type {
   GoogleStatus,
   Item,
   ItemState,
+  SortMode,
   StateFilter,
 } from "./types";
 
@@ -81,6 +82,7 @@ export const api = {
     alert_id?: number;
     state?: StateFilter;
     since_hours?: number;
+    sort?: SortMode;
     limit?: number;
     offset?: number;
   }) => {
@@ -88,6 +90,7 @@ export const api = {
     if (params.alert_id !== undefined) qs.set("alert_id", String(params.alert_id));
     if (params.state) qs.set("state", params.state);
     if (params.since_hours !== undefined) qs.set("since_hours", String(params.since_hours));
+    if (params.sort) qs.set("sort", params.sort);
     if (params.limit !== undefined) qs.set("limit", String(params.limit));
     if (params.offset !== undefined) qs.set("offset", String(params.offset));
     const q = qs.toString();

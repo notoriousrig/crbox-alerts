@@ -1,15 +1,30 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 
 import { api } from "./api";
-import type { Alert, Item, StateFilter, View } from "./types";
+import type { Alert, Item, SortMode, StateFilter, TimeWindow, View } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { ItemList } from "./components/ItemList";
 import { DigestView } from "./components/DigestView";
 import { AlertModal } from "./components/AlertModal";
 import { ConnectGmailBanner } from "./components/ConnectGmailBanner";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { ViewModeToggle } from "./components/ViewModeToggle";
+import { useViewMode } from "./hooks/useViewMode";
+
+const TIME_WINDOWS: { id: TimeWindow; label: string; hours: number | null }[] = [
+  { id: "all", label: "All time", hours: null },
+  { id: "today", label: "Today", hours: 24 },
+  { id: "week", label: "This week", hours: 24 * 7 },
+  { id: "month", label: "This month", hours: 24 * 30 },
+];
+
+const SORT_OPTIONS: { id: SortMode; label: string }[] = [
+  { id: "newest", label: "Newest first" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "source", label: "By source" },
+];
 
 export default function App() {
   const qc = useQueryClient();
@@ -17,6 +32,22 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Alert | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const { mode: viewMode, setMode: setViewMode, cycle: cycleViewMode } = useViewMode();
+
+  // Keyboard: `v` cycles density.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const inField = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName ?? "");
+      if (!inField && e.key === "v") {
+        e.preventDefault();
+        cycleViewMode();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [cycleViewMode]);
 
   const alertsQ = useQuery({
     queryKey: ["alerts"],
@@ -29,11 +60,24 @@ export default function App() {
   });
 
   const itemsParams = useMemo(() => {
-    if (view.kind === "alert") return { alert_id: view.alertId, state: "inbox" as StateFilter };
-    if (view.kind === "saved") return { state: "saved" as StateFilter };
-    if (view.kind === "hidden") return { state: "hidden" as StateFilter };
-    return { state: "inbox" as StateFilter };
-  }, [view]);
+    const hours = TIME_WINDOWS.find((t) => t.id === timeWindow)?.hours ?? null;
+    const base: {
+      alert_id?: number;
+      state: StateFilter;
+      sort: SortMode;
+      since_hours?: number;
+      limit: number;
+    } = {
+      state: "inbox",
+      sort: sortMode,
+      limit: 500,
+    };
+    if (hours !== null) base.since_hours = hours;
+    if (view.kind === "alert") return { ...base, alert_id: view.alertId };
+    if (view.kind === "saved") return { ...base, state: "saved" as StateFilter };
+    if (view.kind === "hidden") return { ...base, state: "hidden" as StateFilter };
+    return base;
+  }, [view, timeWindow, sortMode]);
 
   const itemsQ = useQuery({
     queryKey: ["items", itemsParams],
@@ -158,26 +202,61 @@ export default function App() {
       />
 
       <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <header className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2 sticky top-0 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
-          <h1 className="text-xl font-semibold flex-1">{currentTitle}</h1>
-          <button
-            onClick={() => pollAllMut.mutate()}
-            disabled={pollAllMut.isPending}
-            className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-50"
-            title="Poll Gmail now"
-          >
-            <RefreshCw size={18} className={pollAllMut.isPending ? "animate-spin" : ""} />
-          </button>
-          <ThemeToggle />
+        <header className="px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur z-10">
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-xl font-semibold flex-1">{currentTitle}</h1>
+            <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            <button
+              onClick={() => pollAllMut.mutate()}
+              disabled={pollAllMut.isPending}
+              className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 disabled:opacity-50"
+              title="Poll Gmail now"
+            >
+              <RefreshCw size={18} className={pollAllMut.isPending ? "animate-spin" : ""} />
+            </button>
+            <ThemeToggle />
+          </div>
+          {view.kind !== "digest" && (
+            <div className="flex items-center gap-3 text-sm">
+              <label className="flex items-center gap-1.5 text-zinc-500">
+                <span className="text-xs">Window</span>
+                <select
+                  value={timeWindow}
+                  onChange={(e) => setTimeWindow(e.target.value as TimeWindow)}
+                  className="bg-transparent border border-zinc-300 dark:border-zinc-700 rounded-md px-2 py-1 text-sm"
+                >
+                  {TIME_WINDOWS.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-zinc-500">
+                <span className="text-xs">Sort</span>
+                <select
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value as SortMode)}
+                  className="bg-transparent border border-zinc-300 dark:border-zinc-700 rounded-md px-2 py-1 text-sm"
+                >
+                  {SORT_OPTIONS.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </label>
+              <span className="ml-auto text-xs text-zinc-500">
+                {itemsQ.data ? `${itemsQ.data.length} item${itemsQ.data.length === 1 ? "" : "s"}` : ""}
+              </span>
+            </div>
+          )}
         </header>
 
         <ConnectGmailBanner />
 
-        <div className="p-6 max-w-3xl mx-auto">
+        <div className={viewMode === "text" ? "px-6 py-4 max-w-5xl mx-auto" : "p-6 max-w-3xl mx-auto"}>
           {view.kind === "digest" ? (
             <DigestView
               digest={digestQ.data}
               isLoading={digestQ.isLoading}
+              mode={viewMode}
               onToggleRead={handleToggleRead}
               onToggleSaved={handleToggleSaved}
               onToggleHidden={handleToggleHidden}
@@ -190,6 +269,7 @@ export default function App() {
             <ItemList
               items={itemsQ.data}
               isLoading={itemsQ.isLoading}
+              mode={viewMode}
               emptyMessage={
                 view.kind === "saved"
                   ? "No saved items yet."

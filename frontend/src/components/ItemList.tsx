@@ -1,10 +1,12 @@
 import { Loader2 } from "lucide-react";
 import type { Item } from "../types";
+import type { ViewMode } from "../hooks/useViewMode";
 import { ItemCard } from "./ItemCard";
 
 interface Props {
   items: Item[] | undefined;
   isLoading: boolean;
+  mode: ViewMode;
   emptyMessage: string;
   onToggleRead: (item: Item) => void;
   onToggleSaved: (item: Item) => void;
@@ -13,7 +15,7 @@ interface Props {
 }
 
 export function ItemList({
-  items, isLoading, emptyMessage,
+  items, isLoading, mode, emptyMessage,
   onToggleRead, onToggleSaved, onToggleHidden, onOpen,
 }: Props) {
   if (isLoading) {
@@ -30,12 +32,14 @@ export function ItemList({
       </div>
     );
   }
+  const gap = mode === "text" ? "gap-0.5" : mode === "list" ? "gap-1.5" : mode === "compact" ? "gap-2" : "gap-3";
   return (
-    <div className="flex flex-col gap-3">
+    <div className={`flex flex-col ${gap}`}>
       {items.map((it) => (
         <ItemCard
           key={it.id}
           item={it}
+          mode={mode}
           onToggleRead={onToggleRead}
           onToggleSaved={onToggleSaved}
           onToggleHidden={onToggleHidden}
