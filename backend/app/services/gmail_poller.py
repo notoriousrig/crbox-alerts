@@ -1,12 +1,15 @@
 """Poll Gmail for Google Alerts emails, parse, upsert items.
 
 Pulls messages matching `from:googlealerts-noreply@google.com newer_than:Nd`,
-parses the HTML body into individual alert results, buckets them by
-matching the message Subject against each Alert's `subject_match` field,
-and dedups on the Gmail message ID + per-message item index.
+parses each message body (plain-text or HTML), and groups results into
+per-query Alert buckets. Buckets are derived from either:
 
+  - Section headers in digest-format emails:
+    `=== News - 1 new result for ["query"] ===`
+  - The email Subject (`Google Alert - <query>`) for single-query emails.
+
+Dedup state lives entirely in our DB. Item id is sha1(message_id + index).
 Read-only Gmail scope — we don't mark messages read or modify them.
-Dedup state lives entirely in our DB (item.guid = f"{msg_id}:{index}").
 """
 from __future__ import annotations
 
@@ -19,7 +22,6 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
-from bs4 import BeautifulSoup
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -41,6 +43,17 @@ log = logging.getLogger(__name__)
 _QUERY = "from:googlealerts-noreply@google.com newer_than:{days}d"
 _SUBJECT_PREFIX_RE = re.compile(r"^(?:re:\s*|fwd:\s*)?google alert(?:s)?(?:\s*[-–—:])?\s*", re.I)
 _WS_RE = re.compile(r"\s+")
+# Section header in plain-text digest emails:
+#   === News - 1 new result for ["query"] ===
+# The bracketed query can wrap across soft-wrapped lines, so DOTALL.
+_SECTION_RE = re.compile(
+    r"===\s+(.+?)\s+-\s+\d+\s+new\s+results?\s+for\s+\[(.+?)\]\s+===",
+    re.DOTALL | re.IGNORECASE,
+)
+# URL on its own line in plain-text emails: <https://www.google.com/url?...>
+_URL_LINE_RE = re.compile(r"<(https?://[^>\s]+)>")
+# Trailing truncation marker " ..."
+_TRUNC_RE = re.compile(r"\s+\.{3,}\s*$")
 
 
 class PollResult:
@@ -99,119 +112,130 @@ def _strip_subject_prefix(subject: str) -> str:
     return _SUBJECT_PREFIX_RE.sub("", subject or "").strip()
 
 
-def _parse_alert_email(html: str) -> list[dict[str, Any]]:
-    """Extract per-result items from a Google Alerts HTML email.
+def _extract_results_from_section(body: str) -> list[dict[str, Any]]:
+    """Pull individual results from one section of a plain-text alert email.
 
-    Google Alerts emails wrap each result in a structure like:
-      <a href="https://www.google.com/url?...&url=REAL"><b>Title</b></a>
-      <div>...snippet...</div>
-
-    We grab every <a> whose href starts with google.com/url, take the
-    visible link text as the title, and the next sibling block of text
-    as the snippet.
+    Each result ends with a URL line `<https://www.google.com/url?...>`.
+    Text before that URL (back to the previous URL or section start) is
+    the result body. We treat the first non-blank line as the title and
+    everything between it and the URL as the snippet.
     """
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "lxml")
-    items: list[dict[str, Any]] = []
-    seen_links: set[str] = set()
-
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if "google.com/url" not in href and "google.com/alerts" not in href:
+    results: list[dict[str, Any]] = []
+    cursor = 0
+    for m in _URL_LINE_RE.finditer(body):
+        chunk = body[cursor:m.start()]
+        cursor = m.end()
+        wrapped_url = m.group(1)
+        # Skip Google Alerts management URLs (unsubscribe, settings, etc.)
+        if "google.com/alerts" in wrapped_url or "support.google" in wrapped_url:
             continue
-        unwrapped = unwrap(href)
-        if not unwrapped or unwrapped in seen_links:
+        link = unwrap(wrapped_url)
+        if not link:
             continue
-        # Skip alert-management links (manage, edit, delete).
-        if "google.com/alerts" in unwrapped:
+        lines = [ln.strip() for ln in chunk.splitlines() if ln.strip()]
+        if not lines:
             continue
-        seen_links.add(unwrapped)
-
-        title = _norm_text(a.get_text(" ", strip=True))
+        title = _TRUNC_RE.sub("", lines[0]).strip()
         if not title or len(title) < 5:
             continue
-
-        # Walk forward through following siblings to find a snippet block.
-        snippet = ""
-        node = a
-        for _ in range(6):
-            node = node.find_next()
-            if node is None:
-                break
-            if node.name == "a" and "href" in node.attrs and "google.com/url" in node["href"]:
-                break  # next result starts
-            text = _norm_text(node.get_text(" ", strip=True)) if hasattr(node, "get_text") else ""
-            if text and text != title:
-                snippet = text
-                break
-
-        items.append({
+        # Drop the "... - Source" marker line if present, plus the
+        # source-duplicate line that often follows.
+        snippet_lines = lines[1:]
+        while snippet_lines and (
+            snippet_lines[0].startswith("...")
+            or snippet_lines[0].startswith("- ")
+        ):
+            snippet_lines = snippet_lines[1:]
+            if snippet_lines:
+                # The next line is usually the source name on its own; skip it.
+                snippet_lines = snippet_lines[1:]
+            break
+        snippet = _norm_text(" ".join(snippet_lines))
+        results.append({
             "title": title[:500],
             "snippet": snippet,
-            "link": unwrapped,
-            "original_link": href,
-            "source_domain": source_domain(unwrapped),
+            "link": link,
+            "original_link": wrapped_url,
+            "source_domain": source_domain(link),
         })
+    return results
+
+
+def _parse_alert_email(body: str, fallback_query: str) -> list[dict[str, Any]]:
+    """Parse a Google Alerts email body (plain-text, possibly digest).
+
+    Returns a list of items, each with a `query` key naming the alert
+    bucket they belong to. Two paths:
+
+    - **Digest format**: `=== News - N new results for ["query"] ===`
+      section headers. Each section bucketed under its own query.
+    - **Single-query format**: no section headers. Everything buckets
+      under `fallback_query` (typically `Subject` minus `Google Alert -`).
+    """
+    if not body:
+        return []
+
+    sections = list(_SECTION_RE.finditer(body))
+    items: list[dict[str, Any]] = []
+
+    if sections:
+        for i, m in enumerate(sections):
+            query = _norm_text(m.group(2).replace("\n", " "))
+            start = m.end()
+            end = sections[i + 1].start() if i + 1 < len(sections) else len(body)
+            for r in _extract_results_from_section(body[start:end]):
+                items.append({"query": query, **r})
+    else:
+        for r in _extract_results_from_section(body):
+            items.append({"query": fallback_query, **r})
+
     return items
 
 
-def _match_alert(subject: str, alerts: list[Alert]) -> Alert | None:
-    """Find the Alert whose subject_match (or name) appears in the email subject."""
-    if not subject:
-        return None
-    subj_lower = subject.lower()
-    query = _strip_subject_prefix(subject).lower()
+def _find_or_create_alert(db: Session, alerts: list[Alert], query: str) -> Alert:
+    """Find an existing Alert matching `query`, or auto-create one named after it."""
+    needle = (query or "").strip()
+    if len(needle) < 2:
+        needle = "Unsorted"
+
+    # Exact-name match first.
+    for a in alerts:
+        if a.name.lower() == needle.lower():
+            return a
+    # Then substring match against subject_match (longest wins).
+    n_lower = needle.lower()
     best: Alert | None = None
     best_len = 0
     for a in alerts:
-        needle = (a.subject_match or a.name).strip().lower()
-        if not needle:
-            continue
-        if needle in subj_lower or needle in query:
-            if len(needle) > best_len:
+        sub = (a.subject_match or "").strip().lower()
+        if sub and (sub in n_lower or n_lower in sub):
+            if len(sub) > best_len:
                 best = a
-                best_len = len(needle)
-    return best
+                best_len = len(sub)
+    if best is not None:
+        return best
 
-
-def _auto_create_alert(db: Session, subject: str) -> Alert:
-    """Derive an Alert from an email Subject line.
-
-    Strips the "Google Alert - " prefix and uses the remainder as both
-    the alert name and its subject_match. If the strip yields nothing
-    usable, falls back to a single shared "Unsorted" bucket.
-    """
-    query = _strip_subject_prefix(subject)
-    if not query or len(query) < 2:
-        name = "Unsorted"
-    else:
-        # Truncate to fit the column (120 chars).
-        name = query[:120]
-
-    existing = db.execute(select(Alert).where(Alert.name == name)).scalar_one_or_none()
-    if existing is not None:
-        return existing
-
-    a = Alert(
+    # Auto-create.
+    name = needle[:120]
+    new_alert = Alert(
         name=name,
-        description="Auto-created from Gmail Subject line.",
+        description="Auto-created from Google Alerts email.",
         subject_match=name,
         icon="🔔",
         sort_order=100,
     )
-    db.add(a)
+    db.add(new_alert)
     try:
         db.flush()
     except Exception:
-        # Race against a parallel worker that just created the same row.
         db.rollback()
         existing = db.execute(select(Alert).where(Alert.name == name)).scalar_one_or_none()
         if existing is not None:
             return existing
         raise
-    log.info("Auto-created alert %r from Subject %r", name, subject)
-    return a
+    log.info("Auto-created alert %r", name)
+    alerts.append(new_alert)
+    return new_alert
 
 
 def _parse_date(headers: list[dict[str, str]]) -> datetime:
@@ -290,19 +314,15 @@ def poll_gmail() -> PollResult:
             headers = payload.get("headers") or []
             subject = _header(headers, "Subject")
             published_at = _parse_date(headers)
+            fallback_query = _strip_subject_prefix(subject) or "Unsorted"
 
-            alert = _match_alert(subject, alerts)
-            if alert is None:
-                alert = _auto_create_alert(db, subject)
-                if alert not in alerts:
-                    alerts.append(alert)
-
-            html = _decode_body(payload)
-            parsed = _parse_alert_email(html)
+            body = _decode_body(payload)
+            parsed = _parse_alert_email(body, fallback_query)
             for idx, entry in enumerate(parsed):
                 iid = _item_id(mid, idx)
                 if db.get(Item, iid) is not None:
                     continue
+                alert = _find_or_create_alert(db, alerts, entry["query"])
                 db.add(Item(
                     id=iid,
                     alert_id=alert.id,
@@ -314,12 +334,10 @@ def poll_gmail() -> PollResult:
                     original_link=entry["original_link"],
                     published_at=published_at,
                 ))
+                alert.last_fetched_at = datetime.utcnow()
+                alert.last_status = 200
+                alert.last_error = ""
                 result.items_new += 1
-
-            # Tag the alert that received items so the UI can show last-fetched.
-            alert.last_fetched_at = datetime.utcnow()
-            alert.last_status = 200
-            alert.last_error = ""
 
         db.commit()
     finally:
